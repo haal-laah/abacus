@@ -1,0 +1,400 @@
+/**
+ * Abacus Frontend Application
+ * A lightweight dashboard for visualizing and monitoring beads across multiple projects
+ */
+
+import './components/base.js';
+import './components/abacus-priority-badge.js';
+import './components/abacus-type-badge.js';
+import './components/abacus-modal.js';
+import './components/abacus-add-project-modal.js';
+import './components/abacus-bead-detail-modal.js';
+import './components/abacus-confirm-dialog.js';
+import './components/abacus-bead-card.js';
+import './components/abacus-kanban-column.js';
+import './components/abacus-kanban-board.js';
+import './components/abacus-project-tab.js';
+import './components/abacus-sidebar.js';
+import './components/abacus-header.js';
+
+// ============================================
+// State Management
+// ============================================
+const state = {
+  projects: [],
+  currentProject: null,
+  beads: [],
+  theme: localStorage.getItem('abacus-theme') || 'light',
+  eventSource: null,
+  loading: {
+    projects: false,
+    beads: false,
+    addProject: false,
+    removeProject: false
+  }
+};
+
+// ============================================
+// API Functions
+// ============================================
+const api = {
+  /**
+   * Fetch all projects
+   */
+  async getProjects() {
+    const response = await fetch('/api/projects');
+    if (!response.ok) throw new Error('Failed to fetch projects');
+    return response.json();
+  },
+
+  /**
+   * Add a new project
+   * @param {string} path - Path to the project directory
+   */
+  async addProject(path) {
+    const response = await fetch('/api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to add project');
+    return data;
+  },
+
+  /**
+   * Remove a project
+   * @param {number} id - Project ID
+   */
+  async removeProject(id) {
+    const response = await fetch(`/api/projects/${id}`, {
+      method: 'DELETE'
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to remove project');
+    return data;
+  },
+
+  /**
+   * Get beads for a project
+   * @param {number} id - Project ID
+   */
+  async getBeads(id) {
+    const response = await fetch(`/api/projects/${id}/beads`);
+    if (!response.ok) throw new Error('Failed to fetch beads');
+    return response.json();
+  }
+};
+
+// ============================================
+// Utility Functions
+// ============================================
+function showError(message) {
+  // Simple alert for now - could be replaced with toast notification
+  alert(message);
+}
+
+// ============================================
+// UI Updates
+// ============================================
+function updateTheme() {
+  document.documentElement.setAttribute('data-theme', state.theme);
+  localStorage.setItem('abacus-theme', state.theme);
+  const header = document.querySelector('abacus-header');
+  if (header) {
+    header.setAttribute('theme', state.theme);
+  }
+}
+
+function renderProjectList() {
+  const sidebar = document.querySelector('abacus-sidebar');
+  if (!sidebar) return;
+
+  // Clear existing content
+  sidebar.innerHTML = '';
+
+  state.projects.forEach(project => {
+    const tab = document.createElement('abacus-project-tab');
+    tab.setAttribute('project-id', project.id);
+    tab.setAttribute('name', project.name);
+    tab.setAttribute('path', project.path);
+    tab.setAttribute('count', project.beadCount || 0);
+    
+    if (state.currentProject && state.currentProject.id === project.id) {
+      tab.setAttribute('active', '');
+    }
+
+    sidebar.appendChild(tab);
+  });
+}
+
+function updateKanbanBoard() {
+  const board = document.querySelector('abacus-kanban-board');
+  const welcome = document.getElementById('welcome-state');
+  
+  if (!state.currentProject) {
+    board.classList.add('hidden');
+    welcome.classList.remove('hidden');
+    return;
+  }
+
+  welcome.classList.add('hidden');
+  board.classList.remove('hidden');
+  
+  board.setAttribute('project-name', state.currentProject.name);
+  board.setAttribute('beads', JSON.stringify(state.beads));
+  
+  if (state.loading.beads) {
+    board.setAttribute('loading', '');
+  } else {
+    board.removeAttribute('loading');
+  }
+}
+
+// ============================================
+// Event Handlers
+// ============================================
+async function handleProjectSelect(event) {
+  const { projectId, name, path } = event.detail;
+  const id = parseInt(projectId);
+  
+  state.currentProject = { id, name, path };
+  
+  // Update active state in sidebar
+  renderProjectList();
+  
+  // Show loading state
+  state.loading.beads = true;
+  updateKanbanBoard();
+  
+  try {
+    const data = await api.getBeads(id);
+    state.beads = data.beads || [];
+  } catch (error) {
+    console.error('Failed to fetch beads:', error);
+    showError('Failed to load beads for this project');
+    state.beads = [];
+  } finally {
+    state.loading.beads = false;
+    updateKanbanBoard();
+  }
+}
+
+function handleAddProjectClick() {
+  const modal = document.getElementById('add-project-modal');
+  modal.setAttribute('open', '');
+}
+
+async function handleAddProjectSubmit(event) {
+  const { path } = event.detail;
+  const modal = document.getElementById('add-project-modal');
+  
+  state.loading.addProject = true;
+  modal.setAttribute('loading', '');
+  
+  try {
+    const project = await api.addProject(path);
+    state.projects.push(project);
+    renderProjectList();
+    modal.removeAttribute('open');
+    
+    // Automatically select the new project
+    handleProjectSelect({ 
+      detail: { 
+        projectId: project.id, 
+        name: project.name, 
+        path: project.path 
+      } 
+    });
+  } catch (error) {
+    modal.showError(error.message);
+  } finally {
+    state.loading.addProject = false;
+    modal.removeAttribute('loading');
+  }
+}
+
+function handleRemoveProjectClick() {
+  const modal = document.getElementById('confirm-dialog');
+  modal.setAttribute('title', 'Remove Project');
+  modal.setAttribute('message', 'Are you sure you want to remove this project from Abacus? This will only unregister the project. Your beads data will not be deleted.');
+  modal.setAttribute('confirm-text', 'Remove Project');
+  modal.setAttribute('destructive', '');
+  modal.setAttribute('open', '');
+}
+
+async function handleRemoveProjectConfirm() {
+  if (!state.currentProject) return;
+  
+  const modal = document.getElementById('confirm-dialog');
+  state.loading.removeProject = true;
+  modal.setAttribute('loading', '');
+  
+  try {
+    await api.removeProject(state.currentProject.id);
+    
+    // Remove from state
+    state.projects = state.projects.filter(p => p.id !== state.currentProject.id);
+    state.currentProject = null;
+    state.beads = [];
+    
+    renderProjectList();
+    updateKanbanBoard();
+    modal.removeAttribute('open');
+  } catch (error) {
+    console.error('Failed to remove project:', error);
+    showError('Failed to remove project');
+    modal.removeAttribute('open');
+  } finally {
+    state.loading.removeProject = false;
+    modal.removeAttribute('loading');
+  }
+}
+
+function handleBeadSelect(event) {
+  const { beadId } = event.detail;
+  const bead = state.beads.find(b => b.id === beadId);
+  
+  if (bead) {
+    const modal = document.getElementById('bead-detail-modal');
+    modal.setAttribute('bead', JSON.stringify(bead));
+    modal.setAttribute('open', '');
+  }
+}
+
+function handleDependencyClick(event) {
+  const { beadId } = event.detail;
+  const bead = state.beads.find(b => b.id === beadId);
+  
+  if (bead) {
+    const modal = document.getElementById('bead-detail-modal');
+    modal.setAttribute('bead', JSON.stringify(bead));
+  }
+}
+
+function handleModalClose(event) {
+  const modal = event.target;
+  modal.removeAttribute('open');
+}
+
+function handleThemeToggle() {
+  const themes = ['light', 'dark', 'nord', 'warm'];
+  const currentIndex = themes.indexOf(state.theme);
+  const nextIndex = (currentIndex + 1) % themes.length;
+  state.theme = themes[nextIndex];
+  updateTheme();
+}
+
+// ============================================
+// Server-Sent Events
+// ============================================
+let sseReconnectAttempts = 0;
+const MAX_RECONNECT_DELAY = 30000;
+
+function initSSE() {
+  if (state.eventSource && state.eventSource.readyState !== EventSource.CLOSED) {
+    return;
+  }
+
+  state.eventSource = new EventSource('/api/events');
+
+  state.eventSource.onopen = () => {
+    console.log('SSE connection established');
+    sseReconnectAttempts = 0;
+  };
+
+  state.eventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+
+      if (data.type === 'connected') {
+        console.log('SSE connected to server');
+        return;
+      }
+
+      if (data.type === 'update' && state.currentProject) {
+        // Check if this update is for the current project
+        if (data.project === state.currentProject.path) {
+          state.beads = data.beads || [];
+          updateKanbanBoard();
+
+          // Update bead count in sidebar
+          const projectIndex = state.projects.findIndex(p => p.id === state.currentProject.id);
+          if (projectIndex !== -1) {
+            state.projects[projectIndex].beadCount = state.beads.length;
+            renderProjectList();
+          }
+        } else {
+          // Update the project count in state if it's another project
+          const projectIndex = state.projects.findIndex(p => p.path === data.project);
+          if (projectIndex !== -1) {
+            state.projects[projectIndex].beadCount = data.beads.length;
+            renderProjectList();
+          }
+        }
+      }
+    } catch (error) {
+      console.error('SSE parse error:', error);
+    }
+  };
+
+  state.eventSource.onerror = (error) => {
+    if (state.eventSource.readyState === EventSource.CLOSED) {
+      console.log('SSE connection closed, will reconnect...');
+    } else {
+      console.error('SSE error:', error);
+    }
+
+    if (state.eventSource) {
+      state.eventSource.close();
+      state.eventSource = null;
+    }
+
+    sseReconnectAttempts++;
+    const delay = Math.min(1000 * Math.pow(2, sseReconnectAttempts - 1), MAX_RECONNECT_DELAY);
+
+    console.log(`Reconnecting SSE in ${delay}ms (attempt ${sseReconnectAttempts})...`);
+
+    setTimeout(() => {
+      initSSE();
+    }, delay);
+  };
+}
+
+// ============================================
+// Initialization
+// ============================================
+async function init() {
+  // Initialize theme
+  updateTheme();
+
+  // Event Listeners
+  document.addEventListener('theme-toggle', handleThemeToggle);
+  document.addEventListener('add-project-click', handleAddProjectClick);
+  document.addEventListener('project-select', handleProjectSelect);
+  document.addEventListener('remove-project-click', handleRemoveProjectClick);
+  document.addEventListener('bead-select', handleBeadSelect);
+  document.addEventListener('dependency-click', handleDependencyClick);
+  document.addEventListener('modal-submit', handleAddProjectSubmit);
+  document.addEventListener('modal-confirm', handleRemoveProjectConfirm);
+  document.addEventListener('modal-close', handleModalClose);
+
+  // Initialize SSE
+  initSSE();
+
+  // Load projects
+  state.loading.projects = true;
+  
+  try {
+    state.projects = await api.getProjects();
+    renderProjectList();
+  } catch (error) {
+    console.error('Failed to load projects:', error);
+    showError('Failed to load projects');
+  } finally {
+    state.loading.projects = false;
+  }
+}
+
+// Start the application
+init();

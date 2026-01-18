@@ -1,0 +1,37 @@
+/**
+ * Warm Theme for Abacus
+ * Cozy, earthy tones for reduced eye strain
+ */
+
+[data-theme="warm"] {
+  /* Warm backgrounds */
+  --color-bg-primary: #1F1B18;
+  --color-bg-secondary: #2A2520;
+  --color-bg-tertiary: #352F28;
+  --color-bg-hover: #403830;
+  
+  /* Warm text */
+  --color-text-primary: #F5E6D3;
+  --color-text-secondary: #E0D0BC;
+  --color-text-muted: #B8A898;
+  
+  /* Amber accent */
+  --color-accent: #E5A54B;
+  --color-accent-hover: #D4963F;
+  --color-accent-active: #C08535;
+  
+  /* Semantic colors (warm variants) */
+  --color-success: #8CB369;
+  --color-warning: #E5A54B;
+  --color-error: #C75D5D;
+  --color-info: #7B9FAB;
+  
+  /* Borders */
+  --color-border: #4A4238;
+  --color-border-light: #352F28;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.6);
+}

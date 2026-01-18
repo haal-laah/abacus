@@ -1,0 +1,72 @@
+:root {
+  /* Background colors */
+  --color-bg-primary: #f8f9fa;
+  --color-bg-secondary: #ffffff;
+  --color-bg-tertiary: #e9ecef;
+
+  /* Text colors */
+  --color-text-primary: #212529;
+  --color-text-secondary: #6c757d;
+  --color-text-muted: #adb5bd;
+
+  /* Border colors */
+  --color-border: #dee2e6;
+  --color-border-light: #e9ecef;
+
+  /* Brand colors - NEW Teal accent */
+  --color-accent: #14B8A6;
+  --color-accent-hover: #0d9488;
+
+  /* Aliases for backwards compat */
+  --color-primary: var(--color-accent);
+  --color-primary-hover: var(--color-accent-hover);
+
+  /* Danger colors */
+  --color-danger: #dc3545;
+  --color-danger-hover: #c82333;
+
+  /* Utility colors */
+  --color-success: #28a745;
+  --color-warning: #ffc107;
+
+  /* Priority colors */
+  --color-priority-0: #dc3545;
+  --color-priority-1: #fd7e14;
+  --color-priority-2: #ffc107;
+  --color-priority-3: #20c997;
+  --color-priority-4: #6c757d;
+
+  /* Type colors */
+  --color-type-bug: #dc3545;
+  --color-type-feature: #28a745;
+  --color-type-task: #007bff;
+  --color-type-epic: #6f42c1;
+  --color-type-chore: #6c757d;
+
+  /* Status colors */
+  --color-status-open: #007bff;
+  --color-status-in_progress: #ffc107;
+  --color-status-blocked: #dc3545;
+  --color-status-closed: #28a745;
+
+  /* NEW utility tokens */
+  --color-overlay: rgba(0, 0, 0, 0.5);
+  --color-on-accent: #ffffff;
+  --color-on-warning: #212529;
+  --color-on-primary-muted: rgba(255, 255, 255, 0.2);
+
+  /* Font family */
+  --font-family-sans: 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+/* Dark theme overrides */
+[data-theme="dark"] {
+  --color-bg-primary: #1a1a2e;
+  --color-bg-secondary: #16213e;
+  --color-bg-tertiary: #0f3460;
+  --color-text-primary: #e9ecef;
+  --color-text-secondary: #adb5bd;
+  --color-text-muted: #6c757d;
+  --color-border: #0f3460;
+  --color-border-light: #16213e;
+}

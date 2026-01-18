@@ -1,0 +1,28 @@
+{
+  "name": "abacus",
+  "version": "1.0.0",
+  "description": "A lightweight dashboard for visualizing and monitoring beads across multiple projects",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug"
+  },
+  "keywords": [
+    "dashboard",
+    "kanban",
+    "beads",
+    "issue-tracker"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "chokidar": "^3.6.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.57.0"
+  }
+}

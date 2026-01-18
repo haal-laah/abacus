@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+
+# Config directory (contains user-specific data)
+.abacus/
+.sisyphus/
+
+# Beads directory (issue tracking data)
+.beads/
+
+# OS files
+.DS_Store
+Thumbs.db
+nul
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Package manager lock files (keep only one)
+pnpm-lock.yaml
+yarn.lock
+
+# Test results
+test-results/
+playwright-report/
+playwright/.cache/
+.playwright-home/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Playground (local experiments)
+playground/
+
+# Misc
+_ignore/
+
+# Agent instructions (project-specific)
+AGENTS.md

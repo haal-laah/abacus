@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Abacus - Beads Dashboard</title>
+  <link rel="preload" href="fonts/geist/GeistSans-Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="themes/nord.css">
+  <link rel="stylesheet" href="themes/warm.css">
+  <link rel="stylesheet" href="styles/fonts.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <abacus-header></abacus-header>
+    
+    <div class="main-layout">
+      <abacus-sidebar></abacus-sidebar>
+      
+      <main class="content">
+        <!-- Welcome State (shown when no project selected) -->
+        <div class="welcome-state" id="welcome-state">
+          <div class="welcome-content">
+            <h2>Welcome to Abacus</h2>
+            <p>A lightweight dashboard for visualizing and monitoring beads across multiple projects.</p>
+            <p>Select a project from the sidebar or add a new one to get started.</p>
+          </div>
+        </div>
+        
+        <abacus-kanban-board class="hidden" id="kanban-board"></abacus-kanban-board>
+      </main>
+    </div>
+    
+    <abacus-add-project-modal id="add-project-modal"></abacus-add-project-modal>
+    <abacus-bead-detail-modal id="bead-detail-modal"></abacus-bead-detail-modal>
+    <abacus-confirm-dialog id="confirm-dialog"></abacus-confirm-dialog>
+  </div>
+  
+  <script type="module" src="app.js"></script>
+</body>
+</html>
