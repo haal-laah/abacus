@@ -1,6 +1,6 @@
 {
   "name": "abacus",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A lightweight dashboard for visualizing and monitoring beads across multiple projects",
   "main": "server.js",
   "scripts": {
