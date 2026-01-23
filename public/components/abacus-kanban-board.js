@@ -4,7 +4,7 @@ import './abacus-bead-card.js';
 
 class AbacusKanbanBoard extends AbacusElement {
   static get observedAttributes() {
-    return ['project-name', 'beads', 'loading'];
+    return ['beads', 'loading'];
   }
 
   constructor() {
@@ -57,55 +57,22 @@ class AbacusKanbanBoard extends AbacusElement {
   }
 
   render() {
-    const projectName = this.escapeHtml(this.getAttribute('project-name') || 'Project');
     const isLoading = this.hasAttribute('loading');
     const groups = this._groupBeadsByStatus();
-    
+
     const statuses = ['open', 'in_progress', 'blocked', 'closed'];
-    
+
     this.shadowRoot.innerHTML = `
       <style>
         :host {
           display: block;
           height: 100%;
         }
-        .kanban-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: var(--spacing-lg);
-        }
-        .kanban-header h2 {
-          font-size: 1.5rem;
-          font-weight: 600;
-          color: var(--color-text-primary);
-          margin: 0;
-        }
-        .btn {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: var(--spacing-sm);
-          padding: var(--spacing-xs) var(--spacing-sm);
-          font-size: 0.75rem;
-          font-weight: 500;
-          border-radius: var(--radius-md);
-          border: none;
-          cursor: pointer;
-          transition: all var(--transition-fast);
-        }
-        .btn-danger {
-          background-color: var(--color-danger);
-          color: var(--color-on-accent);
-        }
-        .btn-danger:hover {
-          background-color: var(--color-danger-hover);
-        }
         .kanban-columns {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
           gap: var(--spacing-md);
-          height: calc(100% - 80px);
+          height: 100%;
         }
         .skeleton {
           background: linear-gradient(90deg, var(--color-bg-tertiary) 25%, var(--color-border) 37%, var(--color-bg-tertiary) 63%);
@@ -128,10 +95,6 @@ class AbacusKanbanBoard extends AbacusElement {
           .kanban-columns { grid-template-columns: 1fr; gap: var(--spacing-lg); }
         }
       </style>
-      <div class="kanban-header">
-        <h2>${projectName}</h2>
-        <button class="btn btn-danger remove-project-btn">Remove Project</button>
-      </div>
       <div class="kanban-columns">
         ${statuses.map(status => `
           <abacus-kanban-column status="${status}" count="${groups[status].length}">
@@ -149,10 +112,6 @@ class AbacusKanbanBoard extends AbacusElement {
         `).join('')}
       </div>
     `;
-    
-    this.shadowRoot.querySelector('.remove-project-btn').addEventListener('click', () => {
-      this.emit('remove-project-click');
-    });
   }
 }
 

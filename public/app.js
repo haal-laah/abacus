@@ -140,8 +140,7 @@ function updateKanbanBoard() {
 
   welcome.classList.add('hidden');
   board.classList.remove('hidden');
-  
-  board.setAttribute('project-name', state.currentProject.name);
+
   board.setAttribute('beads', JSON.stringify(state.beads));
   
   if (state.loading.beads) {
