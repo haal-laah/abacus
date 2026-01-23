@@ -1,6 +1,7 @@
 import { AbacusElement } from './base.js';
 import './abacus-priority-badge.js';
 import './abacus-type-badge.js';
+import './abacus-avatar-badge.js';
 
 class AbacusBeadCard extends AbacusElement {
   static get observedAttributes() {
@@ -29,16 +30,21 @@ class AbacusBeadCard extends AbacusElement {
 
   render() {
     const beadId = this.getAttribute('bead-id') || '';
-    const title = this.escapeHtml(this.getAttribute('title') || 'Untitled');
+    const title = this.getAttribute('title') || 'Untitled';
+    const escapedTitle = this.escapeHtml(title);
     const priority = this.getAttribute('priority') || '2';
     const type = this.getAttribute('type') || 'task';
-    const assignee = this.escapeHtml(this.getAttribute('assignee') || '');
+    const assignee = this.getAttribute('assignee') || '';
     const labels = this._labels || [];
-    
-    const labelsHtml = labels.length > 0 
-      ? `<div class="bead-labels">${labels.map(l => `<span class="bead-label">${this.escapeHtml(l)}</span>`).join('')}</div>`
+
+    // Compact labels: show first 2 + "+N more"
+    const visibleLabels = labels.slice(0, 2);
+    const extraCount = labels.length - 2;
+    const labelsHtml = visibleLabels.length > 0
+      ? visibleLabels.map(l => `<span class="bead-label">${this.escapeHtml(l)}</span>`).join('') +
+        (extraCount > 0 ? `<span class="bead-label bead-label-more">+${extraCount}</span>` : '')
       : '';
-    
+
     this.shadowRoot.innerHTML = `
       <style>
         :host {
@@ -48,7 +54,7 @@ class AbacusBeadCard extends AbacusElement {
           background-color: var(--color-bg-primary);
           border: 1px solid var(--color-border);
           border-radius: var(--radius-md);
-          padding: var(--spacing-md);
+          padding: var(--spacing-sm);
           margin-bottom: var(--spacing-sm);
           cursor: pointer;
           transition: all var(--transition-fast);
@@ -57,70 +63,73 @@ class AbacusBeadCard extends AbacusElement {
           box-shadow: var(--shadow-md);
           transform: translateY(-1px);
         }
-        .bead-card-header {
+        .card-header {
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          margin-bottom: var(--spacing-sm);
+          gap: 0.25rem;
+          margin-bottom: 0.25rem;
         }
         .bead-id {
           font-family: 'SF Mono', 'Fira Code', monospace;
-          font-size: 0.75rem;
+          font-size: 0.6875rem;
           color: var(--color-text-muted);
+          flex-shrink: 0;
         }
         .bead-title {
           font-weight: 500;
-          font-size: 0.9375rem;
-          line-height: 1.4;
-          margin-bottom: var(--spacing-sm);
+          font-size: 0.875rem;
+          line-height: 1.3;
           color: var(--color-text-primary);
+          white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
+          flex: 1;
+          min-width: 0;
         }
-        .bead-meta {
+        .card-footer {
           display: flex;
           align-items: center;
-          flex-wrap: wrap;
+          justify-content: space-between;
           gap: var(--spacing-xs);
         }
-        .bead-assignee {
-          font-size: 0.75rem;
-          color: var(--color-text-secondary);
-          background-color: var(--color-bg-tertiary);
-          padding: 0.125rem 0.5rem;
-          border-radius: var(--radius-sm);
-        }
-        .bead-labels {
+        .labels {
           display: flex;
-          flex-wrap: wrap;
-          gap: var(--spacing-xs);
-          margin-top: var(--spacing-sm);
+          align-items: center;
+          gap: 0.25rem;
+          flex: 1;
+          min-width: 0;
+          overflow: hidden;
         }
         .bead-label {
-          font-size: 0.6875rem;
+          font-size: 0.625rem;
           color: var(--color-text-secondary);
           background-color: var(--color-bg-tertiary);
-          padding: 0.125rem 0.375rem;
+          padding: 0.0625rem 0.25rem;
           border-radius: var(--radius-sm);
+          white-space: nowrap;
+        }
+        .bead-label-more {
+          font-weight: 600;
+          color: var(--color-text-muted);
+        }
+        abacus-avatar-badge {
+          flex-shrink: 0;
         }
       </style>
       <div class="bead-card">
-        <div class="bead-card-header">
+        <div class="card-header">
           <span class="bead-id">${beadId}</span>
           <abacus-priority-badge priority="${priority}"></abacus-priority-badge>
-        </div>
-        <div class="bead-title">${title}</div>
-        <div class="bead-meta">
           <abacus-type-badge type="${type}"></abacus-type-badge>
-          ${assignee ? `<span class="bead-assignee">${assignee}</span>` : ''}
+          <span class="bead-title" title="${escapedTitle}">${escapedTitle}</span>
         </div>
-        ${labelsHtml}
+        <div class="card-footer">
+          <div class="labels">${labelsHtml}</div>
+          ${assignee ? `<abacus-avatar-badge name="${this.escapeHtml(assignee)}"></abacus-avatar-badge>` : ''}
+        </div>
       </div>
     `;
-    
+
     this.shadowRoot.querySelector('.bead-card').addEventListener('click', () => {
       this.emit('bead-select', { beadId: this.getAttribute('bead-id') });
     });
