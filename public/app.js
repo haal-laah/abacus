@@ -16,6 +16,7 @@ import './components/abacus-kanban-board.js';
 import './components/abacus-project-tab.js';
 import './components/abacus-sidebar.js';
 import './components/abacus-header.js';
+import './components/abacus-sort-dropdown.js';
 
 // ============================================
 // State Management
@@ -31,8 +32,64 @@ const state = {
     beads: false,
     addProject: false,
     removeProject: false
+  },
+  sortPreferences: {},      // { [projectId]: sortKey }
+  showArchivedPreferences: {} // { [projectId]: boolean }
+};
+
+// ============================================
+// Sort Comparators
+// ============================================
+const typeOrder = { bug: 0, feature: 1, task: 2, epic: 3, chore: 4 };
+
+const sortComparators = {
+  priority: (a, b) => (a.priority || 2) - (b.priority || 2),
+  newest: (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0),
+  oldest: (a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0),
+  updated: (a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0),
+  type: (a, b) => (typeOrder[a.type] ?? 2) - (typeOrder[b.type] ?? 2),
+  label: (a, b) => {
+    const aLabel = a.labels?.[0] || 'zzz';
+    const bLabel = b.labels?.[0] || 'zzz';
+    return aLabel.localeCompare(bLabel);
   }
 };
+
+/**
+ * Sort beads using the specified comparator
+ * @param {Array} beads - Array of bead objects
+ * @param {string} sortKey - Key for sortComparators
+ * @returns {Array} Sorted copy of beads array
+ */
+function sortBeads(beads, sortKey) {
+  const comparator = sortComparators[sortKey] || sortComparators.priority;
+  return [...beads].sort(comparator);
+}
+
+/**
+ * Filter out archived beads (those with "archived" label)
+ * @param {Array} beads - Array of bead objects
+ * @param {boolean} showArchived - Whether to include archived beads
+ * @returns {Array} Filtered beads array
+ */
+function filterArchived(beads, showArchived) {
+  if (showArchived) return beads;
+  return beads.filter(bead => !(bead.labels || []).includes('archived'));
+}
+
+/**
+ * Get sorted and filtered beads for display
+ * @param {Array} beads - Raw beads array
+ * @param {number} projectId - Project ID for preferences lookup
+ * @returns {Array} Processed beads ready for display
+ */
+function getProcessedBeads(beads, projectId) {
+  const sortKey = state.sortPreferences[projectId] || 'priority';
+  const showArchived = state.showArchivedPreferences[projectId] || false;
+
+  const filtered = filterArchived(beads, showArchived);
+  return sortBeads(filtered, sortKey);
+}
 
 // ============================================
 // API Functions
@@ -131,7 +188,7 @@ function renderProjectList() {
 function updateKanbanBoard() {
   const board = document.querySelector('abacus-kanban-board');
   const welcome = document.getElementById('welcome-state');
-  
+
   if (!state.currentProject) {
     board.classList.add('hidden');
     welcome.classList.remove('hidden');
@@ -141,8 +198,13 @@ function updateKanbanBoard() {
   welcome.classList.add('hidden');
   board.classList.remove('hidden');
 
-  board.setAttribute('beads', JSON.stringify(state.beads));
-  
+  // Pass project-id for sort/filter preferences
+  board.setAttribute('project-id', state.currentProject.id);
+
+  // Apply sorting and filtering before passing to board
+  const processedBeads = getProcessedBeads(state.beads, state.currentProject.id);
+  board.setAttribute('beads', JSON.stringify(processedBeads));
+
   if (state.loading.beads) {
     board.setAttribute('loading', '');
   } else {
@@ -284,6 +346,22 @@ function handleThemeToggle() {
   updateTheme();
 }
 
+function handleSortChange(event) {
+  if (!state.currentProject) return;
+
+  const { sortKey } = event.detail;
+  state.sortPreferences[state.currentProject.id] = sortKey;
+  updateKanbanBoard();
+}
+
+function handleArchivedToggle(event) {
+  if (!state.currentProject) return;
+
+  const { show } = event.detail;
+  state.showArchivedPreferences[state.currentProject.id] = show;
+  updateKanbanBoard();
+}
+
 // ============================================
 // Server-Sent Events
 // ============================================
@@ -377,6 +455,8 @@ async function init() {
   document.addEventListener('modal-submit', handleAddProjectSubmit);
   document.addEventListener('modal-confirm', handleRemoveProjectConfirm);
   document.addEventListener('modal-close', handleModalClose);
+  document.addEventListener('sort-change', handleSortChange);
+  document.addEventListener('archived-toggle', handleArchivedToggle);
 
   // Initialize SSE
   initSSE();

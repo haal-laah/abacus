@@ -1,15 +1,17 @@
 import { AbacusElement } from './base.js';
 import './abacus-kanban-column.js';
 import './abacus-bead-card.js';
+import './abacus-sort-dropdown.js';
 
 class AbacusKanbanBoard extends AbacusElement {
   static get observedAttributes() {
-    return ['beads', 'loading'];
+    return ['beads', 'loading', 'project-id'];
   }
 
   constructor() {
     super();
     this._beads = [];
+    this._projectId = null;
   }
 
   attributeChangedCallback(name, oldVal, newVal) {
@@ -19,6 +21,8 @@ class AbacusKanbanBoard extends AbacusElement {
       } catch (e) {
         this._beads = [];
       }
+    } else if (name === 'project-id') {
+      this._projectId = newVal;
     }
     if (this.shadowRoot) this.render();
   }
@@ -29,6 +33,7 @@ class AbacusKanbanBoard extends AbacusElement {
     } catch (e) {
       this._beads = [];
     }
+    this._projectId = this.getAttribute('project-id');
     super.connectedCallback();
   }
 
@@ -65,14 +70,22 @@ class AbacusKanbanBoard extends AbacusElement {
     this.shadowRoot.innerHTML = `
       <style>
         :host {
-          display: block;
+          display: flex;
+          flex-direction: column;
           height: 100%;
+        }
+        .board-toolbar {
+          flex-shrink: 0;
+          padding: 0 var(--spacing-xs);
+          margin-bottom: var(--spacing-sm);
+          border-bottom: 1px solid var(--color-border);
         }
         .kanban-columns {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
           gap: var(--spacing-md);
-          height: 100%;
+          flex: 1;
+          min-height: 0;
         }
         .skeleton {
           background: linear-gradient(90deg, var(--color-bg-tertiary) 25%, var(--color-border) 37%, var(--color-bg-tertiary) 63%);
@@ -95,6 +108,11 @@ class AbacusKanbanBoard extends AbacusElement {
           .kanban-columns { grid-template-columns: 1fr; gap: var(--spacing-lg); }
         }
       </style>
+      ${this._projectId ? `
+        <div class="board-toolbar">
+          <abacus-sort-dropdown project-id="${this.escapeHtml(this._projectId)}"></abacus-sort-dropdown>
+        </div>
+      ` : ''}
       <div class="kanban-columns">
         ${statuses.map(status => `
           <abacus-kanban-column status="${status}" count="${groups[status].length}">
