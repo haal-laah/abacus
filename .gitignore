@@ -64,6 +64,7 @@ AGENTS.md
 
 # Agent workspaces (agent-mail coordination)
 .agents/
+.agent-mail-project-id
 
 # Task drafts and PRDs
 tasks/
