@@ -27,7 +27,7 @@
 
 ## What is Abacus?
 
-Abacus is a real-time dashboard for [beads](https://github.com/steveyegge/beads) - a lightweight issue tracking system that stores issues as local files. Think of it as a visual Kanban board for your beads projects.
+Abacus is a real-time dashboard for [beads](https://github.com/Dicklesworthstone/beads_rust) - a lightweight issue tracking system that stores issues as local files. Think of it as a visual Kanban board for your beads projects.
 
 **Why Abacus?**
 
