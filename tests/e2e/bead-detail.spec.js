@@ -17,13 +17,19 @@ test.describe('bead detail modal', () => {
   });
 
   test('clicking a bead opens modal with full fields and dependency navigation', async ({ page }) => {
-    const openCard = page.locator('.column-cards[data-status="open"] .bead-card', { hasText: 'bd-0001' });
+    const board = page.locator('abacus-kanban-board');
+    const openColumn = board.locator('abacus-kanban-column[status="open"]');
+    const openCard = openColumn.locator('abacus-bead-card[bead-id="bd-0001"]');
     await openCard.click();
 
-    await expect(page.locator('#bead-detail-modal')).toBeVisible();
-    await expect(page.locator('#bead-detail-title')).toContainText('bd-0001');
+    const modal = page.locator('#bead-detail-modal');
+    await expect(modal).toBeVisible();
 
-    const body = page.locator('#bead-detail-body');
+    // Check modal title (bead title in header)
+    await expect(modal.locator('.modal-title')).toContainText('Login form fails on Safari');
+
+    // Check body content
+    const body = modal.locator('.bead-detail');
     await expect(body).toContainText('Description');
     await expect(body).toContainText('Repro: open /login');
     await expect(body).toContainText('Status');
@@ -33,36 +39,40 @@ test.describe('bead detail modal', () => {
     await expect(body).toContainText('Type');
     await expect(body).toContainText('bug');
     await expect(body).toContainText('Assignee');
-    await expect(body).toContainText('@alice');
+    await expect(body).toContainText('alice');
 
     // Dependencies section exists and has clickable dependency
-    const dep = body.locator('.bead-dependency', { hasText: 'bd-0003' });
+    const dep = modal.locator('.dependency', { hasText: 'bd-0003' });
     await expect(dep).toBeVisible();
     await dep.click();
 
-    await expect(page.locator('#bead-detail-title')).toContainText('bd-0003');
-    await expect(page.locator('#bead-detail-body')).toContainText('Blocked');
+    // After clicking dependency, modal shows that bead
+    await expect(modal.locator('.modal-title')).toContainText('Epic: Authentication overhaul');
+    await expect(modal.locator('.bead-detail')).toContainText('Blocked');
   });
 
   test('modal closes via X, Escape, and overlay click', async ({ page }) => {
-    const openCard = page.locator('.column-cards[data-status="open"] .bead-card', { hasText: 'bd-0001' });
+    const board = page.locator('abacus-kanban-board');
+    const openColumn = board.locator('abacus-kanban-column[status="open"]');
+    const openCard = openColumn.locator('abacus-bead-card[bead-id="bd-0001"]');
+    const modal = page.locator('#bead-detail-modal');
 
     // Close via X
     await openCard.click();
-    await expect(page.locator('#bead-detail-modal')).toBeVisible();
-    await page.locator('#close-bead-modal').click();
-    await expect(page.locator('#bead-detail-modal')).toBeHidden();
+    await expect(modal).toBeVisible();
+    await modal.locator('.modal-close').click();
+    await expect(modal).toBeHidden();
 
     // Close via Escape
     await openCard.click();
-    await expect(page.locator('#bead-detail-modal')).toBeVisible();
+    await expect(modal).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(page.locator('#bead-detail-modal')).toBeHidden();
+    await expect(modal).toBeHidden();
 
     // Close via overlay (click at top-left corner to avoid modal content)
     await openCard.click();
-    await expect(page.locator('#bead-detail-modal')).toBeVisible();
-    await page.locator('#bead-detail-modal .modal-overlay').click({ position: { x: 10, y: 10 } });
-    await expect(page.locator('#bead-detail-modal')).toBeHidden();
+    await expect(modal).toBeVisible();
+    await modal.locator('.modal-overlay').click({ position: { x: 10, y: 10 } });
+    await expect(modal).toBeHidden();
   });
 });

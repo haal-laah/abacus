@@ -305,7 +305,16 @@ function readBeadsFromJSONL(projectPath) {
     const lines = content.trim().split('\n').filter(line => line.trim());
     return lines.map(line => {
       try {
-        return JSON.parse(line);
+        const bead = JSON.parse(line);
+        // Normalize dependencies to match SQLite format
+        // JSONL has { depends_on_id, type }, SQLite uses { target, type }
+        if (bead.dependencies && Array.isArray(bead.dependencies)) {
+          bead.dependencies = bead.dependencies.map(dep => ({
+            target: dep.depends_on_id || dep.target,
+            type: dep.type
+          }));
+        }
+        return bead;
       } catch (e) {
         console.error('Error parsing bead line:', e);
         return null;
@@ -571,7 +580,14 @@ function addLabelToBeadSQLite(projectPath, beadId, label) {
     return { labels };
   } catch (error) {
     console.error('Error adding label to SQLite:', error);
-    return { error: 'Database error', status: 500 };
+    // Provide more specific error messages
+    if (error.code === 'SQLITE_BUSY') {
+      return { error: 'Database is locked. Please try again.', status: 503 };
+    }
+    if (error.code === 'SQLITE_READONLY') {
+      return { error: 'Database is read-only', status: 403 };
+    }
+    return { error: `Database error: ${error.message}`, status: 500 };
   } finally {
     if (database) {
       try { database.close(); } catch (e) { /* ignore close errors */ }
@@ -618,12 +634,222 @@ function removeLabelFromBeadSQLite(projectPath, beadId, label) {
     return { labels };
   } catch (error) {
     console.error('Error removing label from SQLite:', error);
+    // Provide more specific error messages
+    if (error.code === 'SQLITE_BUSY') {
+      return { error: 'Database is locked. Please try again.', status: 503 };
+    }
+    if (error.code === 'SQLITE_READONLY') {
+      return { error: 'Database is read-only', status: 403 };
+    }
+    return { error: `Database error: ${error.message}`, status: 500 };
+  } finally {
+    if (database) {
+      try { database.close(); } catch (e) { /* ignore close errors */ }
+    }
+  }
+}
+
+/**
+ * Get comments for a bead from SQLite database
+ * @param {string} projectPath - Path to the project
+ * @param {string} beadId - ID of the bead
+ * @returns {Object} - Result with comments array or error
+ */
+function getCommentsForBead(projectPath, beadId) {
+  const dbPath = path.join(projectPath, '.beads', 'beads.db');
+
+  if (!fs.existsSync(dbPath)) {
+    // No SQLite database - check if bead exists in JSONL
+    const beads = readBeadsFromJSONL(projectPath);
+    const bead = beads.find(b => b.id === beadId);
+    if (!bead) {
+      return { error: 'Bead not found', status: 404 };
+    }
+    // JSONL doesn't have comments - return empty array
+    return { comments: [] };
+  }
+
+  let database;
+  try {
+    database = new Database(dbPath, { readonly: true });
+
+    // Check if bead exists
+    const bead = database.prepare('SELECT id FROM issues WHERE id = ?').get(beadId);
+    if (!bead) {
+      return { error: 'Bead not found', status: 404 };
+    }
+
+    // Check if comments table exists
+    const tableExists = database.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='comments'"
+    ).get();
+
+    if (!tableExists) {
+      // No comments table - return empty array
+      return { comments: [] };
+    }
+
+    // Fetch comments ordered by created_at ASC
+    const comments = database.prepare(`
+      SELECT author, text as content, created_at
+      FROM comments
+      WHERE issue_id = ?
+      ORDER BY created_at ASC
+    `).all(beadId);
+
+    return { comments };
+  } catch (error) {
+    console.error('Error getting comments from SQLite:', error);
     return { error: 'Database error', status: 500 };
   } finally {
     if (database) {
       try { database.close(); } catch (e) { /* ignore close errors */ }
     }
   }
+}
+
+/**
+ * Get dependency chain for a bead (3-level BFS traversal)
+ * @param {string} projectPath - Path to the project
+ * @param {string} beadId - ID of the bead
+ * @param {number} maxDepth - Maximum traversal depth (default 3)
+ * @returns {Object} - Dependency chain with ancestors, descendants, cycle detection
+ */
+function getDependencyChain(projectPath, beadId, maxDepth = 3) {
+  const beads = readBeads(projectPath);
+  const beadMap = new Map(beads.map(b => [b.id, b]));
+  const bead = beadMap.get(beadId);
+
+  if (!bead) {
+    return null;
+  }
+
+  const visited = new Set([beadId]);
+  let hasCycle = false;
+
+  // Build map: beadId -> beads that BLOCK this bead (for finding ancestors)
+  // If bead A has "blocks" dependency on B, then A blocks B, meaning A is an ancestor of B
+  const blockedByMap = new Map();
+  for (const b of beads) {
+    const blocks = (b.dependencies || []).filter(d => d.type === 'blocks');
+    for (const dep of blocks) {
+      if (!blockedByMap.has(dep.target)) {
+        blockedByMap.set(dep.target, []);
+      }
+      blockedByMap.get(dep.target).push(b.id);
+    }
+  }
+
+  // Traverse ancestors (beads that block this bead)
+  const ancestors = [];
+  let ancestorsTruncated = false;
+  const ancestorQueue = [{ id: beadId, depth: 0, parentId: null }];
+
+  while (ancestorQueue.length > 0) {
+    const { id, depth, parentId } = ancestorQueue.shift();
+
+    if (depth > 0) {
+      const b = beadMap.get(id);
+      if (b) {
+        ancestors.push({
+          id: b.id,
+          title: b.title,
+          status: b.status,
+          priority: b.priority,
+          depth,
+          parentId
+        });
+      }
+    }
+
+    if (depth >= maxDepth) {
+      // Check if there are more blockers beyond this depth
+      const blockers = blockedByMap.get(id) || [];
+      if (blockers.length > 0) {
+        ancestorsTruncated = true;
+      }
+      continue;
+    }
+
+    // Find beads that block this one (ancestors)
+    const blockers = blockedByMap.get(id) || [];
+
+    for (const blockerId of blockers) {
+      if (visited.has(blockerId)) {
+        hasCycle = true;
+        continue;
+      }
+      visited.add(blockerId);
+      ancestorQueue.push({ id: blockerId, depth: depth + 1, parentId: id });
+    }
+  }
+
+  // Reset visited for descendant traversal (keep root bead)
+  visited.clear();
+  visited.add(beadId);
+
+  // Traverse descendants (beads that THIS bead blocks)
+  // Look at the bead's "blocks" dependencies directly
+  const descendants = [];
+  let descendantsTruncated = false;
+  const descendantQueue = [{ id: beadId, depth: 0, parentId: null }];
+
+  while (descendantQueue.length > 0) {
+    const { id, depth, parentId } = descendantQueue.shift();
+
+    if (depth > 0) {
+      const b = beadMap.get(id);
+      if (b) {
+        descendants.push({
+          id: b.id,
+          title: b.title,
+          status: b.status,
+          priority: b.priority,
+          depth,
+          parentId
+        });
+      }
+    }
+
+    if (depth >= maxDepth) {
+      // Check if there are more descendants beyond this depth
+      const current = beadMap.get(id);
+      const blocks = (current?.dependencies || []).filter(d => d.type === 'blocks');
+      if (blocks.length > 0) {
+        descendantsTruncated = true;
+      }
+      continue;
+    }
+
+    // Find beads that this one blocks (descendants)
+    const current = beadMap.get(id);
+    const blocks = (current?.dependencies || []).filter(d => d.type === 'blocks');
+
+    for (const dep of blocks) {
+      if (visited.has(dep.target)) {
+        hasCycle = true;
+        continue;
+      }
+      visited.add(dep.target);
+      descendantQueue.push({ id: dep.target, depth: depth + 1, parentId: id });
+    }
+  }
+
+  return {
+    bead: {
+      id: bead.id,
+      title: bead.title,
+      status: bead.status,
+      priority: bead.priority
+    },
+    ancestors,
+    descendants,
+    hasCycle,
+    truncated: {
+      ancestors: ancestorsTruncated,
+      descendants: descendantsTruncated
+    }
+  };
 }
 
 /**
@@ -834,6 +1060,27 @@ const apiRoutes = {
     return { project, beads };
   },
 
+  // GET /api/projects/:id/beads/:beadId - Get a single bead by ID
+  'GET /api/projects/:id/beads/:beadId': (req, pathParts) => {
+    const projectId = pathParts[3];
+    const beadId = pathParts[5];
+
+    const project = db.getById(projectId);
+
+    if (!project) {
+      return { error: 'Project not found', status: 404 };
+    }
+
+    const beads = readBeads(project.path);
+    const bead = beads.find(b => b.id === beadId);
+
+    if (!bead) {
+      return { error: 'Bead not found', status: 404 };
+    }
+
+    return bead;
+  },
+
   // POST /api/projects/:id/beads/:beadId/labels - Add a label to a bead
   'POST /api/projects/:id/beads/:beadId/labels': async (req, pathParts) => {
     const projectId = pathParts[3];
@@ -890,6 +1137,44 @@ const apiRoutes = {
     broadcastProjectUpdate(project.path);
 
     return result;
+  },
+
+  // GET /api/projects/:id/beads/:beadId/comments - Get comments for a bead
+  'GET /api/projects/:id/beads/:beadId/comments': (req, pathParts) => {
+    const projectId = pathParts[3];
+    const beadId = pathParts[5];
+
+    const project = db.getById(projectId);
+    if (!project) {
+      return { error: 'Project not found', status: 404 };
+    }
+
+    const result = getCommentsForBead(project.path, beadId);
+
+    if (result.error) {
+      return result;
+    }
+
+    return result;
+  },
+
+  // GET /api/projects/:id/beads/:beadId/dependencies - Get dependency chain for a bead
+  'GET /api/projects/:id/beads/:beadId/dependencies': (req, pathParts) => {
+    const projectId = pathParts[3];
+    const beadId = pathParts[5];
+
+    const project = db.getById(projectId);
+    if (!project) {
+      return { error: 'Project not found', status: 404 };
+    }
+
+    const chain = getDependencyChain(project.path, beadId);
+
+    if (!chain) {
+      return { error: 'Bead not found', status: 404 };
+    }
+
+    return chain;
   }
 };
 
@@ -917,12 +1202,18 @@ async function handleApiRequest(req, res, pathname, query = {}) {
       routeKey = 'POST /api/projects';
     } else if (method === 'DELETE' && pathname.match(/^\/api\/projects\/\d+$/)) {
       routeKey = 'DELETE /api/projects';
+    } else if (method === 'GET' && pathname.match(/^\/api\/projects\/\d+\/beads\/[^/]+$/) && !pathname.match(/\/(labels|comments)$/)) {
+      routeKey = 'GET /api/projects/:id/beads/:beadId';
     } else if (method === 'GET' && pathname.match(/^\/api\/projects\/\d+\/beads$/)) {
       routeKey = 'GET /api/projects/:id/beads';
     } else if (method === 'POST' && pathname.match(/^\/api\/projects\/\d+\/beads\/[^/]+\/labels$/)) {
       routeKey = 'POST /api/projects/:id/beads/:beadId/labels';
     } else if (method === 'DELETE' && pathname.match(/^\/api\/projects\/\d+\/beads\/[^/]+\/labels\/[^/]+$/)) {
       routeKey = 'DELETE /api/projects/:id/beads/:beadId/labels/:labelName';
+    } else if (method === 'GET' && pathname.match(/^\/api\/projects\/\d+\/beads\/[^/]+\/comments$/)) {
+      routeKey = 'GET /api/projects/:id/beads/:beadId/comments';
+    } else if (method === 'GET' && pathname.match(/^\/api\/projects\/\d+\/beads\/[^/]+\/dependencies$/)) {
+      routeKey = 'GET /api/projects/:id/beads/:beadId/dependencies';
     }
 
     handler = apiRoutes[routeKey];

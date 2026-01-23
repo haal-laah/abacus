@@ -17,6 +17,7 @@ import './components/abacus-project-tab.js';
 import './components/abacus-sidebar.js';
 import './components/abacus-header.js';
 import './components/abacus-sort-dropdown.js';
+import './components/abacus-toast.js';
 
 // ============================================
 // State Management
@@ -34,7 +35,8 @@ const state = {
     removeProject: false
   },
   sortPreferences: {},      // { [projectId]: sortKey }
-  showArchivedPreferences: {} // { [projectId]: boolean }
+  showArchivedPreferences: {}, // { [projectId]: boolean }
+  toast: null                // { message: string, beadId: string, action: 'archive' | 'unarchive' }
 };
 
 // ============================================
@@ -140,6 +142,38 @@ const api = {
     const response = await fetch(`/api/projects/${id}/beads`);
     if (!response.ok) throw new Error('Failed to fetch beads');
     return response.json();
+  },
+
+  /**
+   * Add a label to a bead
+   * @param {number} projectId - Project ID
+   * @param {string} beadId - Bead ID
+   * @param {string} label - Label to add
+   */
+  async addLabel(projectId, beadId, label) {
+    const response = await fetch(`/api/projects/${projectId}/beads/${beadId}/labels`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to add label');
+    return data;
+  },
+
+  /**
+   * Remove a label from a bead
+   * @param {number} projectId - Project ID
+   * @param {string} beadId - Bead ID
+   * @param {string} label - Label to remove
+   */
+  async removeLabel(projectId, beadId, label) {
+    const response = await fetch(`/api/projects/${projectId}/beads/${beadId}/labels/${encodeURIComponent(label)}`, {
+      method: 'DELETE'
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to remove label');
+    return data;
   }
 };
 
@@ -149,6 +183,25 @@ const api = {
 function showError(message) {
   // Simple alert for now - could be replaced with toast notification
   alert(message);
+}
+
+function showToast(message, beadId, action) {
+  hideToast();
+  state.toast = { message, beadId, action };
+
+  const toast = document.createElement('abacus-toast');
+  toast.setAttribute('message', message);
+  toast.setAttribute('show-undo', '');
+  toast.id = 'archive-toast';
+  document.body.appendChild(toast);
+}
+
+function hideToast() {
+  state.toast = null;
+  const existingToast = document.getElementById('archive-toast');
+  if (existingToast) {
+    existingToast.remove();
+  }
 }
 
 // ============================================
@@ -275,7 +328,12 @@ async function handleAddProjectSubmit(event) {
   }
 }
 
-function handleRemoveProjectClick() {
+let projectToRemove = null;
+
+function handleRemoveProjectClick(event) {
+  const { projectId, name, path } = event.detail;
+  projectToRemove = { id: parseInt(projectId), name, path };
+
   const modal = document.getElementById('confirm-dialog');
   modal.setAttribute('title', 'Remove Project');
   modal.setAttribute('message', 'Are you sure you want to remove this project from Abacus? This will only unregister the project. Your beads data will not be deleted.');
@@ -285,20 +343,25 @@ function handleRemoveProjectClick() {
 }
 
 async function handleRemoveProjectConfirm() {
-  if (!state.currentProject) return;
-  
+  if (!projectToRemove) return;
+
   const modal = document.getElementById('confirm-dialog');
   state.loading.removeProject = true;
   modal.setAttribute('loading', '');
-  
+
   try {
-    await api.removeProject(state.currentProject.id);
-    
+    await api.removeProject(projectToRemove.id);
+
     // Remove from state
-    state.projects = state.projects.filter(p => p.id !== state.currentProject.id);
-    state.currentProject = null;
-    state.beads = [];
-    
+    state.projects = state.projects.filter(p => p.id !== projectToRemove.id);
+
+    // Clear current project if it was the one removed
+    if (state.currentProject && state.currentProject.id === projectToRemove.id) {
+      state.currentProject = null;
+      state.beads = [];
+    }
+
+    projectToRemove = null;
     renderProjectList();
     updateKanbanBoard();
     modal.removeAttribute('open');
@@ -309,16 +372,26 @@ async function handleRemoveProjectConfirm() {
   } finally {
     state.loading.removeProject = false;
     modal.removeAttribute('loading');
+    projectToRemove = null;
   }
 }
 
 function handleBeadSelect(event) {
   const { beadId } = event.detail;
   const bead = state.beads.find(b => b.id === beadId);
-  
+
   if (bead) {
+    // Enrich dependencies with target bead status for display
+    const enrichedBead = {
+      ...bead,
+      dependencies: (bead.dependencies || []).map(dep => ({
+        ...dep,
+        targetStatus: state.beads.find(b => b.id === dep.target)?.status || 'unknown'
+      }))
+    };
     const modal = document.getElementById('bead-detail-modal');
-    modal.setAttribute('bead', JSON.stringify(bead));
+    modal.setAttribute('project-id', state.currentProject.id);
+    modal.setAttribute('bead', JSON.stringify(enrichedBead));
     modal.setAttribute('open', '');
   }
 }
@@ -326,10 +399,19 @@ function handleBeadSelect(event) {
 function handleDependencyClick(event) {
   const { beadId } = event.detail;
   const bead = state.beads.find(b => b.id === beadId);
-  
+
   if (bead) {
+    // Enrich dependencies with target bead status for display
+    const enrichedBead = {
+      ...bead,
+      dependencies: (bead.dependencies || []).map(dep => ({
+        ...dep,
+        targetStatus: state.beads.find(b => b.id === dep.target)?.status || 'unknown'
+      }))
+    };
     const modal = document.getElementById('bead-detail-modal');
-    modal.setAttribute('bead', JSON.stringify(bead));
+    modal.setAttribute('project-id', state.currentProject.id);
+    modal.setAttribute('bead', JSON.stringify(enrichedBead));
   }
 }
 
@@ -360,6 +442,60 @@ function handleArchivedToggle(event) {
   const { show } = event.detail;
   state.showArchivedPreferences[state.currentProject.id] = show;
   updateKanbanBoard();
+}
+
+async function handleBeadArchive(event) {
+  if (!state.currentProject) return;
+
+  const { beadId } = event.detail;
+  try {
+    await api.addLabel(state.currentProject.id, beadId, 'archived');
+    showToast('Bead archived', beadId, 'archive');
+
+    // Close modal if open
+    const modal = document.getElementById('bead-detail-modal');
+    if (modal.hasAttribute('open')) {
+      modal.removeAttribute('open');
+    }
+  } catch (error) {
+    console.error('Failed to archive bead:', error);
+    showError('Failed to archive bead');
+  }
+}
+
+async function handleBeadUnarchive(event) {
+  if (!state.currentProject) return;
+
+  const { beadId } = event.detail;
+  try {
+    await api.removeLabel(state.currentProject.id, beadId, 'archived');
+    showToast('Bead unarchived', beadId, 'unarchive');
+  } catch (error) {
+    console.error('Failed to unarchive bead:', error);
+    showError('Failed to unarchive bead');
+  }
+}
+
+function handleToastDismiss() {
+  hideToast();
+}
+
+async function handleToastUndo() {
+  if (!state.toast || !state.currentProject) return;
+
+  const { beadId, action } = state.toast;
+  hideToast();
+
+  try {
+    if (action === 'archive') {
+      await api.removeLabel(state.currentProject.id, beadId, 'archived');
+    } else {
+      await api.addLabel(state.currentProject.id, beadId, 'archived');
+    }
+  } catch (error) {
+    console.error('Failed to undo action:', error);
+    showError('Failed to undo');
+  }
 }
 
 // ============================================
@@ -457,6 +593,10 @@ async function init() {
   document.addEventListener('modal-close', handleModalClose);
   document.addEventListener('sort-change', handleSortChange);
   document.addEventListener('archived-toggle', handleArchivedToggle);
+  document.addEventListener('bead-archive', handleBeadArchive);
+  document.addEventListener('bead-unarchive', handleBeadUnarchive);
+  document.addEventListener('toast-dismiss', handleToastDismiss);
+  document.addEventListener('toast-undo', handleToastUndo);
 
   // Initialize SSE
   initSSE();

@@ -12,10 +12,15 @@ class AbacusKanbanBoard extends AbacusElement {
     super();
     this._beads = [];
     this._projectId = null;
+    this._cardPositions = new Map();
   }
 
   attributeChangedCallback(name, oldVal, newVal) {
     if (name === 'beads') {
+      // Capture positions before re-render for FLIP animation
+      if (this.shadowRoot) {
+        this._capturePositions();
+      }
       try {
         this._beads = JSON.parse(newVal || '[]');
       } catch (e) {
@@ -24,7 +29,58 @@ class AbacusKanbanBoard extends AbacusElement {
     } else if (name === 'project-id') {
       this._projectId = newVal;
     }
-    if (this.shadowRoot) this.render();
+    if (this.shadowRoot) {
+      this.render();
+      // Animate cards that moved after render
+      requestAnimationFrame(() => this._animateMovement());
+    }
+  }
+
+  _capturePositions() {
+    this._cardPositions.clear();
+    this.shadowRoot.querySelectorAll('abacus-bead-card').forEach(card => {
+      const beadId = card.getAttribute('bead-id');
+      if (beadId) {
+        this._cardPositions.set(beadId, card.getBoundingClientRect());
+      }
+    });
+  }
+
+  _animateMovement() {
+    // Check for reduced motion preference
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
+
+    this.shadowRoot.querySelectorAll('abacus-bead-card').forEach(card => {
+      const beadId = card.getAttribute('bead-id');
+      const oldRect = this._cardPositions.get(beadId);
+      if (!oldRect) return;
+
+      const newRect = card.getBoundingClientRect();
+      const deltaX = oldRect.left - newRect.left;
+      const deltaY = oldRect.top - newRect.top;
+
+      // Skip if barely moved
+      if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) return;
+
+      // FLIP: First, Last, Invert, Play
+      // Invert: position card at old location
+      card.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+      card.style.transition = 'none';
+
+      // Force reflow
+      card.offsetHeight;
+
+      // Play: animate to new position
+      card.style.transition = 'transform var(--transition-card-move, 350ms ease-out)';
+      card.style.transform = '';
+
+      // Clean up after animation
+      card.addEventListener('transitionend', () => {
+        card.style.transition = '';
+      }, { once: true });
+    });
   }
 
   connectedCallback() {
@@ -120,8 +176,9 @@ class AbacusKanbanBoard extends AbacusElement {
               <abacus-bead-card
                 bead-id="${this.escapeHtml(bead.id)}"
                 title="${this.escapeHtml(bead.title)}"
-                priority="${bead.priority || 2}"
+                priority="${bead.priority ?? 2}"
                 type="${bead.type || 'task'}"
+                status="${bead.status || 'open'}"
                 ${bead.assignee ? `assignee="${this.escapeHtml(bead.assignee)}"` : ''}
                 labels='${JSON.stringify(bead.labels || [])}'>
               </abacus-bead-card>

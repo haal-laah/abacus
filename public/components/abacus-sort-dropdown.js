@@ -114,29 +114,29 @@ class AbacusSortDropdown extends AbacusElement {
         :host {
           display: flex;
           align-items: center;
-          gap: var(--spacing-md, 1rem);
-          padding: var(--spacing-sm, 0.5rem) 0;
+          gap: var(--spacing-md);
+          padding: var(--spacing-sm) 0;
           font-size: 0.875rem;
         }
 
         .sort-control {
           display: flex;
           align-items: center;
-          gap: var(--spacing-xs, 0.25rem);
+          gap: var(--spacing-xs);
         }
 
         label {
-          color: var(--color-text-secondary, #666);
+          color: var(--color-text-secondary);
           font-weight: 500;
         }
 
         select {
           padding: 0.375rem 0.75rem;
           padding-right: 1.75rem;
-          border: 1px solid var(--color-border, #e0e0e0);
-          border-radius: var(--radius-sm, 4px);
-          background-color: var(--color-bg-primary, #fff);
-          color: var(--color-text-primary, #333);
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          background-color: var(--color-bg-primary);
+          color: var(--color-text-primary);
           font-size: 0.8125rem;
           font-family: inherit;
           cursor: pointer;
@@ -147,19 +147,19 @@ class AbacusSortDropdown extends AbacusElement {
         }
 
         select:hover {
-          border-color: var(--color-border-hover, #ccc);
+          border-color: var(--color-border-hover);
         }
 
         select:focus {
           outline: none;
-          border-color: var(--color-accent, #4f8fe8);
-          box-shadow: 0 0 0 2px var(--color-accent-light, rgba(79, 143, 232, 0.2));
+          border-color: var(--color-accent);
+          box-shadow: 0 0 0 2px var(--color-accent-light);
         }
 
         .archived-toggle {
           display: flex;
           align-items: center;
-          gap: var(--spacing-xs, 0.25rem);
+          gap: var(--spacing-xs);
           cursor: pointer;
           user-select: none;
         }
@@ -168,18 +168,18 @@ class AbacusSortDropdown extends AbacusElement {
           width: 1rem;
           height: 1rem;
           cursor: pointer;
-          accent-color: var(--color-accent, #4f8fe8);
+          accent-color: var(--color-accent);
         }
 
         .archived-toggle span {
-          color: var(--color-text-secondary, #666);
+          color: var(--color-text-secondary);
           font-size: 0.8125rem;
         }
 
         .divider {
           width: 1px;
           height: 1.25rem;
-          background-color: var(--color-border, #e0e0e0);
+          background-color: var(--color-border);
         }
       </style>
 

@@ -8,10 +8,22 @@ class AbacusProjectTab extends AbacusElement {
   constructor() {
     super();
     this._menuOpen = false;
+    this._boundDocumentClickHandler = null;
   }
 
   attributeChangedCallback(name, oldVal, newVal) {
     if (this.shadowRoot) this.render();
+  }
+
+  disconnectedCallback() {
+    this._removeDocumentClickHandler();
+  }
+
+  _removeDocumentClickHandler() {
+    if (this._boundDocumentClickHandler) {
+      document.removeEventListener('click', this._boundDocumentClickHandler);
+      this._boundDocumentClickHandler = null;
+    }
   }
 
   _toggleMenu(e) {
@@ -191,11 +203,14 @@ class AbacusProjectTab extends AbacusElement {
 
     removeBtn.addEventListener('click', (e) => this._handleRemoveClick(e));
 
-    // Close menu when clicking outside
-    document.addEventListener('click', () => {
+    // Close menu when clicking outside - remove any existing handler first
+    this._removeDocumentClickHandler();
+    this._boundDocumentClickHandler = () => {
       this._closeMenu();
       kebabBtn.classList.remove('active');
-    }, { once: true });
+      this._boundDocumentClickHandler = null;
+    };
+    document.addEventListener('click', this._boundDocumentClickHandler, { once: true });
   }
 }
 

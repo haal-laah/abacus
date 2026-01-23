@@ -58,3 +58,12 @@ _ignore/
 
 # Agent instructions (project-specific)
 AGENTS.md
+
+# bv (beads viewer) local config and caches
+.bv/
+
+# Agent workspaces (agent-mail coordination)
+.agents/
+
+# Task drafts and PRDs
+tasks/
