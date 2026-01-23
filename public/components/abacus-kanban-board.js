@@ -1,26 +1,86 @@
 import { AbacusElement } from './base.js';
 import './abacus-kanban-column.js';
 import './abacus-bead-card.js';
+import './abacus-sort-dropdown.js';
 
 class AbacusKanbanBoard extends AbacusElement {
   static get observedAttributes() {
-    return ['project-name', 'beads', 'loading'];
+    return ['beads', 'loading', 'project-id'];
   }
 
   constructor() {
     super();
     this._beads = [];
+    this._projectId = null;
+    this._cardPositions = new Map();
   }
 
   attributeChangedCallback(name, oldVal, newVal) {
     if (name === 'beads') {
+      // Capture positions before re-render for FLIP animation
+      if (this.shadowRoot) {
+        this._capturePositions();
+      }
       try {
         this._beads = JSON.parse(newVal || '[]');
       } catch (e) {
         this._beads = [];
       }
+    } else if (name === 'project-id') {
+      this._projectId = newVal;
     }
-    if (this.shadowRoot) this.render();
+    if (this.shadowRoot) {
+      this.render();
+      // Animate cards that moved after render
+      requestAnimationFrame(() => this._animateMovement());
+    }
+  }
+
+  _capturePositions() {
+    this._cardPositions.clear();
+    this.shadowRoot.querySelectorAll('abacus-bead-card').forEach(card => {
+      const beadId = card.getAttribute('bead-id');
+      if (beadId) {
+        this._cardPositions.set(beadId, card.getBoundingClientRect());
+      }
+    });
+  }
+
+  _animateMovement() {
+    // Check for reduced motion preference
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
+
+    this.shadowRoot.querySelectorAll('abacus-bead-card').forEach(card => {
+      const beadId = card.getAttribute('bead-id');
+      const oldRect = this._cardPositions.get(beadId);
+      if (!oldRect) return;
+
+      const newRect = card.getBoundingClientRect();
+      const deltaX = oldRect.left - newRect.left;
+      const deltaY = oldRect.top - newRect.top;
+
+      // Skip if barely moved
+      if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) return;
+
+      // FLIP: First, Last, Invert, Play
+      // Invert: position card at old location
+      card.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+      card.style.transition = 'none';
+
+      // Force reflow
+      card.offsetHeight;
+
+      // Play: animate to new position
+      card.style.transition = 'transform var(--transition-card-move, 350ms ease-out)';
+      card.style.transform = '';
+
+      // Clean up after animation
+      card.addEventListener('transitionend', () => {
+        card.style.transition = '';
+      }, { once: true });
+    });
   }
 
   connectedCallback() {
@@ -29,6 +89,7 @@ class AbacusKanbanBoard extends AbacusElement {
     } catch (e) {
       this._beads = [];
     }
+    this._projectId = this.getAttribute('project-id');
     super.connectedCallback();
   }
 
@@ -57,55 +118,30 @@ class AbacusKanbanBoard extends AbacusElement {
   }
 
   render() {
-    const projectName = this.escapeHtml(this.getAttribute('project-name') || 'Project');
     const isLoading = this.hasAttribute('loading');
     const groups = this._groupBeadsByStatus();
-    
+
     const statuses = ['open', 'in_progress', 'blocked', 'closed'];
-    
+
     this.shadowRoot.innerHTML = `
       <style>
         :host {
-          display: block;
+          display: flex;
+          flex-direction: column;
           height: 100%;
         }
-        .kanban-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: var(--spacing-lg);
-        }
-        .kanban-header h2 {
-          font-size: 1.5rem;
-          font-weight: 600;
-          color: var(--color-text-primary);
-          margin: 0;
-        }
-        .btn {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: var(--spacing-sm);
-          padding: var(--spacing-xs) var(--spacing-sm);
-          font-size: 0.75rem;
-          font-weight: 500;
-          border-radius: var(--radius-md);
-          border: none;
-          cursor: pointer;
-          transition: all var(--transition-fast);
-        }
-        .btn-danger {
-          background-color: var(--color-danger);
-          color: var(--color-on-accent);
-        }
-        .btn-danger:hover {
-          background-color: var(--color-danger-hover);
+        .board-toolbar {
+          flex-shrink: 0;
+          padding: 0 var(--spacing-xs);
+          margin-bottom: var(--spacing-sm);
+          border-bottom: 1px solid var(--color-border);
         }
         .kanban-columns {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
           gap: var(--spacing-md);
-          height: calc(100% - 80px);
+          flex: 1;
+          min-height: 0;
         }
         .skeleton {
           background: linear-gradient(90deg, var(--color-bg-tertiary) 25%, var(--color-border) 37%, var(--color-bg-tertiary) 63%);
@@ -128,10 +164,11 @@ class AbacusKanbanBoard extends AbacusElement {
           .kanban-columns { grid-template-columns: 1fr; gap: var(--spacing-lg); }
         }
       </style>
-      <div class="kanban-header">
-        <h2>${projectName}</h2>
-        <button class="btn btn-danger remove-project-btn">Remove Project</button>
-      </div>
+      ${this._projectId ? `
+        <div class="board-toolbar">
+          <abacus-sort-dropdown project-id="${this.escapeHtml(this._projectId)}"></abacus-sort-dropdown>
+        </div>
+      ` : ''}
       <div class="kanban-columns">
         ${statuses.map(status => `
           <abacus-kanban-column status="${status}" count="${groups[status].length}">
@@ -139,8 +176,9 @@ class AbacusKanbanBoard extends AbacusElement {
               <abacus-bead-card
                 bead-id="${this.escapeHtml(bead.id)}"
                 title="${this.escapeHtml(bead.title)}"
-                priority="${bead.priority || 2}"
+                priority="${bead.priority ?? 2}"
                 type="${bead.type || 'task'}"
+                status="${bead.status || 'open'}"
                 ${bead.assignee ? `assignee="${this.escapeHtml(bead.assignee)}"` : ''}
                 labels='${JSON.stringify(bead.labels || [])}'>
               </abacus-bead-card>
@@ -149,10 +187,6 @@ class AbacusKanbanBoard extends AbacusElement {
         `).join('')}
       </div>
     `;
-    
-    this.shadowRoot.querySelector('.remove-project-btn').addEventListener('click', () => {
-      this.emit('remove-project-click');
-    });
   }
 }
 

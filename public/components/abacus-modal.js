@@ -104,7 +104,7 @@ export class AbacusModal extends AbacusElement {
     const isOpen = this.hasAttribute('open');
     const isLoading = this.hasAttribute('loading');
     
-    const sizeClass = size === 'small' ? 'modal-small' : size === 'large' ? 'modal-large' : '';
+    const sizeClass = size === 'small' ? 'modal-small' : size === 'large' ? 'modal-large' : size === 'xlarge' ? 'modal-xlarge' : '';
     
     this.shadowRoot.innerHTML = `
       <style>
@@ -140,6 +140,7 @@ export class AbacusModal extends AbacusElement {
         }
         .modal-content.modal-large { max-width: 700px; }
         .modal-content.modal-small { max-width: 400px; }
+        .modal-content.modal-xlarge { max-width: 800px; }
         .modal-header {
           display: flex;
           align-items: center;

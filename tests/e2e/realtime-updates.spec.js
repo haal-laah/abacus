@@ -19,7 +19,9 @@ test.describe('real-time updates (SSE)', () => {
   });
 
   test('changing issues.jsonl moves beads between columns and updates counts', async ({ page }) => {
-    const count = (status) => page.locator(`.bead-count[data-count="${status}"]`);
+    const board = page.locator('abacus-kanban-board');
+    const column = (status) => board.locator(`abacus-kanban-column[status="${status}"]`);
+    const count = (status) => column(status).locator('.bead-count');
 
     await expect(count('open')).toHaveText('2');
     await expect(count('in_progress')).toHaveText('1');
@@ -49,11 +51,11 @@ test.describe('real-time updates (SSE)', () => {
     await expect(count('blocked')).toHaveText('2', { timeout: 10_000 });
 
     // New bead appears in blocked column
-    const blockedColumn = page.locator('.column-cards[data-status="blocked"]');
-    await expect(blockedColumn.locator('.bead-card', { hasText: 'bd-9999' })).toBeVisible();
+    const blockedColumn = column('blocked');
+    await expect(blockedColumn.locator('abacus-bead-card[bead-id="bd-9999"]')).toBeVisible();
 
     // Sidebar count for project updates too
-    const tab = page.locator('.project-tab', { hasText: 'test-project' });
+    const tab = page.locator('abacus-project-tab', { hasText: 'test-project' });
     await expect(tab.locator('.project-count')).toHaveText('6', { timeout: 10_000 });
   });
 });

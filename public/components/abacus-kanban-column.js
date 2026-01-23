@@ -31,6 +31,8 @@ class AbacusKanbanColumn extends AbacusElement {
           background-color: var(--color-bg-secondary);
           border-radius: var(--radius-lg);
           max-height: calc(100vh - 180px);
+          min-width: 0; /* Prevent content from expanding grid cell */
+          overflow: hidden; /* Contain any overflowing content */
         }
         .column-header {
           display: flex;

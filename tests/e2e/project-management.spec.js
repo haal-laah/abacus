@@ -17,67 +17,74 @@ test.describe('project management', () => {
   });
 
   test('Add Project button opens modal and can be closed (X/Cancel/Escape/overlay)', async ({ page }) => {
+    const modal = page.locator('#add-project-modal');
     await page.getByRole('button', { name: /add project/i }).click();
-    await expect(page.locator('#add-project-modal')).toBeVisible();
+    await expect(modal).toHaveAttribute('open', '');
 
-    // Close via X
-    await page.locator('#close-add-modal').click();
-    await expect(page.locator('#add-project-modal')).toBeHidden();
+    // Close via X (inside shadow DOM)
+    await modal.locator('.modal-close').click();
+    await expect(modal).not.toHaveAttribute('open');
 
-    // Close via Cancel
+    // Close via Cancel (inside shadow DOM)
     await page.getByRole('button', { name: /add project/i }).click();
-    await expect(page.locator('#add-project-modal')).toBeVisible();
-    await page.locator('#cancel-add-project').click();
-    await expect(page.locator('#add-project-modal')).toBeHidden();
+    await expect(modal).toHaveAttribute('open', '');
+    await modal.locator('.cancel-btn').click();
+    await expect(modal).not.toHaveAttribute('open');
 
     // Close via Escape
     await page.getByRole('button', { name: /add project/i }).click();
-    await expect(page.locator('#add-project-modal')).toBeVisible();
+    await expect(modal).toHaveAttribute('open', '');
     await page.keyboard.press('Escape');
-    await expect(page.locator('#add-project-modal')).toBeHidden();
+    await expect(modal).not.toHaveAttribute('open');
 
     // Close via overlay click (click at top-left corner to avoid modal content)
     await page.getByRole('button', { name: /add project/i }).click();
-    await expect(page.locator('#add-project-modal')).toBeVisible();
-    await page.locator('#add-project-modal .modal-overlay').click({ position: { x: 10, y: 10 } });
-    await expect(page.locator('#add-project-modal')).toBeHidden();
+    await expect(modal).toHaveAttribute('open', '');
+    await modal.locator('.modal-overlay').click({ position: { x: 10, y: 10 } });
+    await expect(modal).not.toHaveAttribute('open');
   });
 
   test('adding empty path shows validation error', async ({ page }) => {
+    const modal = page.locator('#add-project-modal');
     await page.getByRole('button', { name: /add project/i }).click();
-    await page.locator('#project-path').fill('');
+    await modal.locator('#project-path').fill('');
     await page.getByRole('button', { name: /^add project$/i }).click();
 
-    await expect(page.locator('#add-project-error')).toBeVisible();
-    await expect(page.locator('#add-project-error')).toContainText('Please enter a project path');
+    const errorEl = modal.locator('.form-error');
+    await expect(errorEl).toBeVisible();
+    await expect(errorEl).toContainText('Please enter a project path');
   });
 
   test('adding invalid path shows error', async ({ page }) => {
+    const modal = page.locator('#add-project-modal');
     await page.getByRole('button', { name: /add project/i }).click();
-    await page.locator('#project-path').fill(path.join(TEST_PROJECT_PATH, 'does-not-exist'));
+    await modal.locator('#project-path').fill(path.join(TEST_PROJECT_PATH, 'does-not-exist'));
     await page.getByRole('button', { name: /^add project$/i }).click();
 
-    await expect(page.locator('#add-project-error')).toBeVisible();
-    await expect(page.locator('#add-project-error')).toContainText('Path does not exist');
+    const errorEl = modal.locator('.form-error');
+    await expect(errorEl).toBeVisible();
+    await expect(errorEl).toContainText('Path does not exist');
   });
 
   test('adding path without .beads/issues.jsonl shows validation error', async ({ page }) => {
+    const modal = page.locator('#add-project-modal');
     await page.getByRole('button', { name: /add project/i }).click();
-    await page.locator('#project-path').fill(path.join(__dirname, '..'));
+    await modal.locator('#project-path').fill(path.join(__dirname, '..'));
     await page.getByRole('button', { name: /^add project$/i }).click();
 
-    await expect(page.locator('#add-project-error')).toBeVisible();
-    await expect(page.locator('#add-project-error')).toContainText('valid beads project');
+    const errorEl = modal.locator('.form-error');
+    await expect(errorEl).toBeVisible();
+    await expect(errorEl).toContainText('valid beads project');
   });
 
   test('adding valid beads project appears in sidebar and updates badge count', async ({ page }) => {
     await addProjectViaUI(page, TEST_PROJECT_PATH);
 
-    const tab = page.locator('.project-tab', { hasText: 'test-project' });
+    const tab = page.locator('abacus-project-tab', { hasText: 'test-project' });
     await expect(tab).toBeVisible();
 
-    // Count badge should match fixtures (5 lines)
-    await expect(tab.locator('.project-count')).toHaveText('5');
+    // Count badge should match fixtures (5 lines) - check attribute on the custom element
+    await expect(tab).toHaveAttribute('count', '5');
 
     // Welcome should be hidden after auto-select
     await expect(page.locator('#kanban-board')).toBeVisible();
@@ -87,34 +94,43 @@ test.describe('project management', () => {
   test('duplicate project path shows already registered error', async ({ page }) => {
     await addProjectViaUI(page, TEST_PROJECT_PATH);
 
+    const modal = page.locator('#add-project-modal');
     // open modal again and add same path
     await page.getByRole('button', { name: /add project/i }).click();
-    await page.locator('#project-path').fill(TEST_PROJECT_PATH);
+    await modal.locator('#project-path').fill(TEST_PROJECT_PATH);
     await page.getByRole('button', { name: /^add project$/i }).click();
 
-    await expect(page.locator('#add-project-error')).toBeVisible();
-    await expect(page.locator('#add-project-error')).toContainText('Project already registered');
+    const errorEl = modal.locator('.form-error');
+    await expect(errorEl).toBeVisible();
+    await expect(errorEl).toContainText('Project already registered');
   });
 
   test('remove project confirmation can be canceled and confirmed', async ({ page }) => {
     await addProjectViaUI(page, TEST_PROJECT_PATH);
 
-    // Open remove modal
-    await page.locator('#remove-project-btn').click();
-    await expect(page.locator('#confirm-remove-modal')).toBeVisible();
+    const projectTab = page.locator('abacus-project-tab', { hasText: 'test-project' });
+    const confirmDialog = page.locator('#confirm-dialog');
+
+    // Open remove dialog via kebab menu
+    await projectTab.hover();
+    await projectTab.locator('.kebab-btn').click();
+    await projectTab.locator('.remove-btn').click();
+    await expect(confirmDialog).toHaveAttribute('open', '');
 
     // Cancel keeps project
-    await page.locator('#cancel-remove').click();
-    await expect(page.locator('#confirm-remove-modal')).toBeHidden();
-    await expect(page.locator('.project-tab', { hasText: 'test-project' })).toBeVisible();
+    await confirmDialog.locator('.cancel-btn').click();
+    await expect(confirmDialog).not.toHaveAttribute('open');
+    await expect(projectTab).toBeVisible();
 
-    // Confirm removes project
-    await page.locator('#remove-project-btn').click();
-    await expect(page.locator('#confirm-remove-modal')).toBeVisible();
-    await page.locator('#confirm-remove').click();
+    // Open again and confirm removes project
+    await projectTab.hover();
+    await projectTab.locator('.kebab-btn').click();
+    await projectTab.locator('.remove-btn').click();
+    await expect(confirmDialog).toHaveAttribute('open', '');
+    await confirmDialog.locator('.confirm-btn').click();
 
-    await expect(page.locator('#confirm-remove-modal')).toBeHidden();
-    await expect(page.locator('.project-tab', { hasText: 'test-project' })).toHaveCount(0);
+    await expect(confirmDialog).not.toHaveAttribute('open');
+    await expect(page.locator('abacus-project-tab', { hasText: 'test-project' })).toHaveCount(0);
     await expect(page.locator('#welcome-state')).toBeVisible();
   });
 });

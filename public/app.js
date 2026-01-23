@@ -16,6 +16,8 @@ import './components/abacus-kanban-board.js';
 import './components/abacus-project-tab.js';
 import './components/abacus-sidebar.js';
 import './components/abacus-header.js';
+import './components/abacus-sort-dropdown.js';
+import './components/abacus-toast.js';
 
 // ============================================
 // State Management
@@ -31,8 +33,65 @@ const state = {
     beads: false,
     addProject: false,
     removeProject: false
+  },
+  sortPreferences: {},      // { [projectId]: sortKey }
+  showArchivedPreferences: {}, // { [projectId]: boolean }
+  toast: null                // { message: string, beadId: string, action: 'archive' | 'unarchive' }
+};
+
+// ============================================
+// Sort Comparators
+// ============================================
+const typeOrder = { bug: 0, feature: 1, task: 2, epic: 3, chore: 4 };
+
+const sortComparators = {
+  priority: (a, b) => (a.priority || 2) - (b.priority || 2),
+  newest: (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0),
+  oldest: (a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0),
+  updated: (a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0),
+  type: (a, b) => (typeOrder[a.type] ?? 2) - (typeOrder[b.type] ?? 2),
+  label: (a, b) => {
+    const aLabel = a.labels?.[0] || 'zzz';
+    const bLabel = b.labels?.[0] || 'zzz';
+    return aLabel.localeCompare(bLabel);
   }
 };
+
+/**
+ * Sort beads using the specified comparator
+ * @param {Array} beads - Array of bead objects
+ * @param {string} sortKey - Key for sortComparators
+ * @returns {Array} Sorted copy of beads array
+ */
+function sortBeads(beads, sortKey) {
+  const comparator = sortComparators[sortKey] || sortComparators.priority;
+  return [...beads].sort(comparator);
+}
+
+/**
+ * Filter out archived beads (those with "archived" label)
+ * @param {Array} beads - Array of bead objects
+ * @param {boolean} showArchived - Whether to include archived beads
+ * @returns {Array} Filtered beads array
+ */
+function filterArchived(beads, showArchived) {
+  if (showArchived) return beads;
+  return beads.filter(bead => !(bead.labels || []).includes('archived'));
+}
+
+/**
+ * Get sorted and filtered beads for display
+ * @param {Array} beads - Raw beads array
+ * @param {number} projectId - Project ID for preferences lookup
+ * @returns {Array} Processed beads ready for display
+ */
+function getProcessedBeads(beads, projectId) {
+  const sortKey = state.sortPreferences[projectId] || 'priority';
+  const showArchived = state.showArchivedPreferences[projectId] || false;
+
+  const filtered = filterArchived(beads, showArchived);
+  return sortBeads(filtered, sortKey);
+}
 
 // ============================================
 // API Functions
@@ -83,6 +142,38 @@ const api = {
     const response = await fetch(`/api/projects/${id}/beads`);
     if (!response.ok) throw new Error('Failed to fetch beads');
     return response.json();
+  },
+
+  /**
+   * Add a label to a bead
+   * @param {number} projectId - Project ID
+   * @param {string} beadId - Bead ID
+   * @param {string} label - Label to add
+   */
+  async addLabel(projectId, beadId, label) {
+    const response = await fetch(`/api/projects/${projectId}/beads/${beadId}/labels`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to add label');
+    return data;
+  },
+
+  /**
+   * Remove a label from a bead
+   * @param {number} projectId - Project ID
+   * @param {string} beadId - Bead ID
+   * @param {string} label - Label to remove
+   */
+  async removeLabel(projectId, beadId, label) {
+    const response = await fetch(`/api/projects/${projectId}/beads/${beadId}/labels/${encodeURIComponent(label)}`, {
+      method: 'DELETE'
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to remove label');
+    return data;
   }
 };
 
@@ -92,6 +183,25 @@ const api = {
 function showError(message) {
   // Simple alert for now - could be replaced with toast notification
   alert(message);
+}
+
+function showToast(message, beadId, action) {
+  hideToast();
+  state.toast = { message, beadId, action };
+
+  const toast = document.createElement('abacus-toast');
+  toast.setAttribute('message', message);
+  toast.setAttribute('show-undo', '');
+  toast.id = 'archive-toast';
+  document.body.appendChild(toast);
+}
+
+function hideToast() {
+  state.toast = null;
+  const existingToast = document.getElementById('archive-toast');
+  if (existingToast) {
+    existingToast.remove();
+  }
 }
 
 // ============================================
@@ -131,7 +241,7 @@ function renderProjectList() {
 function updateKanbanBoard() {
   const board = document.querySelector('abacus-kanban-board');
   const welcome = document.getElementById('welcome-state');
-  
+
   if (!state.currentProject) {
     board.classList.add('hidden');
     welcome.classList.remove('hidden');
@@ -140,10 +250,14 @@ function updateKanbanBoard() {
 
   welcome.classList.add('hidden');
   board.classList.remove('hidden');
-  
-  board.setAttribute('project-name', state.currentProject.name);
-  board.setAttribute('beads', JSON.stringify(state.beads));
-  
+
+  // Pass project-id for sort/filter preferences
+  board.setAttribute('project-id', state.currentProject.id);
+
+  // Apply sorting and filtering before passing to board
+  const processedBeads = getProcessedBeads(state.beads, state.currentProject.id);
+  board.setAttribute('beads', JSON.stringify(processedBeads));
+
   if (state.loading.beads) {
     board.setAttribute('loading', '');
   } else {
@@ -214,7 +328,12 @@ async function handleAddProjectSubmit(event) {
   }
 }
 
-function handleRemoveProjectClick() {
+let projectToRemove = null;
+
+function handleRemoveProjectClick(event) {
+  const { projectId, name, path } = event.detail;
+  projectToRemove = { id: parseInt(projectId), name, path };
+
   const modal = document.getElementById('confirm-dialog');
   modal.setAttribute('title', 'Remove Project');
   modal.setAttribute('message', 'Are you sure you want to remove this project from Abacus? This will only unregister the project. Your beads data will not be deleted.');
@@ -224,20 +343,25 @@ function handleRemoveProjectClick() {
 }
 
 async function handleRemoveProjectConfirm() {
-  if (!state.currentProject) return;
-  
+  if (!projectToRemove) return;
+
   const modal = document.getElementById('confirm-dialog');
   state.loading.removeProject = true;
   modal.setAttribute('loading', '');
-  
+
   try {
-    await api.removeProject(state.currentProject.id);
-    
+    await api.removeProject(projectToRemove.id);
+
     // Remove from state
-    state.projects = state.projects.filter(p => p.id !== state.currentProject.id);
-    state.currentProject = null;
-    state.beads = [];
-    
+    state.projects = state.projects.filter(p => p.id !== projectToRemove.id);
+
+    // Clear current project if it was the one removed
+    if (state.currentProject && state.currentProject.id === projectToRemove.id) {
+      state.currentProject = null;
+      state.beads = [];
+    }
+
+    projectToRemove = null;
     renderProjectList();
     updateKanbanBoard();
     modal.removeAttribute('open');
@@ -248,16 +372,26 @@ async function handleRemoveProjectConfirm() {
   } finally {
     state.loading.removeProject = false;
     modal.removeAttribute('loading');
+    projectToRemove = null;
   }
 }
 
 function handleBeadSelect(event) {
   const { beadId } = event.detail;
   const bead = state.beads.find(b => b.id === beadId);
-  
+
   if (bead) {
+    // Enrich dependencies with target bead status for display
+    const enrichedBead = {
+      ...bead,
+      dependencies: (bead.dependencies || []).map(dep => ({
+        ...dep,
+        targetStatus: state.beads.find(b => b.id === dep.target)?.status || 'unknown'
+      }))
+    };
     const modal = document.getElementById('bead-detail-modal');
-    modal.setAttribute('bead', JSON.stringify(bead));
+    modal.setAttribute('project-id', state.currentProject.id);
+    modal.setAttribute('bead', JSON.stringify(enrichedBead));
     modal.setAttribute('open', '');
   }
 }
@@ -265,10 +399,19 @@ function handleBeadSelect(event) {
 function handleDependencyClick(event) {
   const { beadId } = event.detail;
   const bead = state.beads.find(b => b.id === beadId);
-  
+
   if (bead) {
+    // Enrich dependencies with target bead status for display
+    const enrichedBead = {
+      ...bead,
+      dependencies: (bead.dependencies || []).map(dep => ({
+        ...dep,
+        targetStatus: state.beads.find(b => b.id === dep.target)?.status || 'unknown'
+      }))
+    };
     const modal = document.getElementById('bead-detail-modal');
-    modal.setAttribute('bead', JSON.stringify(bead));
+    modal.setAttribute('project-id', state.currentProject.id);
+    modal.setAttribute('bead', JSON.stringify(enrichedBead));
   }
 }
 
@@ -283,6 +426,76 @@ function handleThemeToggle() {
   const nextIndex = (currentIndex + 1) % themes.length;
   state.theme = themes[nextIndex];
   updateTheme();
+}
+
+function handleSortChange(event) {
+  if (!state.currentProject) return;
+
+  const { sortKey } = event.detail;
+  state.sortPreferences[state.currentProject.id] = sortKey;
+  updateKanbanBoard();
+}
+
+function handleArchivedToggle(event) {
+  if (!state.currentProject) return;
+
+  const { show } = event.detail;
+  state.showArchivedPreferences[state.currentProject.id] = show;
+  updateKanbanBoard();
+}
+
+async function handleBeadArchive(event) {
+  if (!state.currentProject) return;
+
+  const { beadId } = event.detail;
+  try {
+    await api.addLabel(state.currentProject.id, beadId, 'archived');
+    showToast('Bead archived', beadId, 'archive');
+
+    // Close modal if open
+    const modal = document.getElementById('bead-detail-modal');
+    if (modal.hasAttribute('open')) {
+      modal.removeAttribute('open');
+    }
+  } catch (error) {
+    console.error('Failed to archive bead:', error);
+    showError('Failed to archive bead');
+  }
+}
+
+async function handleBeadUnarchive(event) {
+  if (!state.currentProject) return;
+
+  const { beadId } = event.detail;
+  try {
+    await api.removeLabel(state.currentProject.id, beadId, 'archived');
+    showToast('Bead unarchived', beadId, 'unarchive');
+  } catch (error) {
+    console.error('Failed to unarchive bead:', error);
+    showError('Failed to unarchive bead');
+  }
+}
+
+function handleToastDismiss() {
+  hideToast();
+}
+
+async function handleToastUndo() {
+  if (!state.toast || !state.currentProject) return;
+
+  const { beadId, action } = state.toast;
+  hideToast();
+
+  try {
+    if (action === 'archive') {
+      await api.removeLabel(state.currentProject.id, beadId, 'archived');
+    } else {
+      await api.addLabel(state.currentProject.id, beadId, 'archived');
+    }
+  } catch (error) {
+    console.error('Failed to undo action:', error);
+    showError('Failed to undo');
+  }
 }
 
 // ============================================
@@ -378,6 +591,12 @@ async function init() {
   document.addEventListener('modal-submit', handleAddProjectSubmit);
   document.addEventListener('modal-confirm', handleRemoveProjectConfirm);
   document.addEventListener('modal-close', handleModalClose);
+  document.addEventListener('sort-change', handleSortChange);
+  document.addEventListener('archived-toggle', handleArchivedToggle);
+  document.addEventListener('bead-archive', handleBeadArchive);
+  document.addEventListener('bead-unarchive', handleBeadUnarchive);
+  document.addEventListener('toast-dismiss', handleToastDismiss);
+  document.addEventListener('toast-undo', handleToastUndo);
 
   // Initialize SSE
   initSSE();

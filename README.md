@@ -38,16 +38,45 @@ Abacus is a real-time dashboard for [beads](https://github.com/steveyegge/beads)
 | No real-time updates when issues change | **Live updates** - Dashboard refreshes automatically via SSE |
 | Command-line only workflow | **Visual interface** - Click to view issue details, navigate dependencies |
 
+<p align="center">
+  <table>
+    <tr>
+      <td align="center"><a href=".github/assets/light.png"><img src=".github/assets/light.png" alt="Light Theme" width="200"></a></td>
+      <td align="center"><a href=".github/assets/dark.png"><img src=".github/assets/dark.png" alt="Dark Theme" width="200"></a></td>
+      <td align="center"><a href=".github/assets/nord.png"><img src=".github/assets/nord.png" alt="Nord Theme" width="200"></a></td>
+      <td align="center"><a href=".github/assets/warm.png"><img src=".github/assets/warm.png" alt="Warm Theme" width="200"></a></td>
+    </tr>
+    <tr>
+      <td align="center"><sub>Light</sub></td>
+      <td align="center"><sub>Dark</sub></td>
+      <td align="center"><sub>Nord</sub></td>
+      <td align="center"><sub>Warm</sub></td>
+    </tr>
+  </table>
+</p>
+
 ## Features
 
 - **Kanban Board** - Visualize beads organized by status (Open, In Progress, Blocked, Closed)
+- **Dependency Graph** - Interactive visualization of bead dependencies with status-colored nodes
 - **Multi-Project Support** - Register and switch between multiple beads projects
 - **Real-Time Updates** - Automatically refreshes when beads data changes (file watching + SSE)
 - **Folder Browser** - Visual folder picker to find and add beads projects
-- **Dependency Navigation** - Click through issue dependencies in the detail modal
+- **Bead Detail Modal** - Expanded view with comments panel and dependency navigation
+- **Archive Support** - Archive completed beads and toggle visibility with "Show Archived"
+- **Board Sorting** - Sort beads by priority, date, or title at the board level
+- **Card Animations** - Smooth transitions and glow effect for in-progress beads
+- **Compact Cards** - Space-efficient card design for better board overview
 - **Theme Support** - Light, Dark, Nord, and Warm themes with persistent preference
 - **Responsive Design** - Works on desktop and tablet
 - **Zero Database** - Uses your existing beads files, no additional storage needed
+
+<p align="center" style="margin-top:65px;">
+  <img src=".github/assets/dependency-graph.png" alt="Dependency Graph" width="60%">
+</p>
+<p align="center">
+  <sub>Dependency graph showing upstream blockers and downstream dependencies</sub>
+</p>
 
 ## Installation
 
@@ -68,9 +97,12 @@ npm install
 
 # Start the server
 npm start
+
+# Or specify a custom port
+npm start -- --port 8080
 ```
 
-Open your browser to [http://localhost:3000](http://localhost:3000)
+Open your browser to [http://localhost:3000](http://localhost:3000) (or your custom port)
 
 ## Quick Start
 
@@ -114,10 +146,26 @@ Use the folder browser or enter a path directly:
 ### Removing Projects
 
 1. Select the project in the sidebar
-2. Click "Remove Project" in the board header
-3. Confirm removal
+2. Click the kebab menu (⋮) on the project tab
+3. Select "Remove Project" and confirm
 
 > **Note**: This only unregisters the project from Abacus. It does not delete any beads data.
+
+### Archiving Beads
+
+Archive completed beads to declutter your board:
+
+1. Click on a bead to open the detail modal
+2. Click "Archive" in the modal header
+3. Use "Show Archived" toggle in the board header to view archived beads
+4. Click "Unarchive" on any archived bead to restore it
+
+### Sorting Beads
+
+Use the sort dropdown in the board header to organize beads by:
+- **Priority** - P0 urgent items first
+- **Created** - Newest or oldest first
+- **Title** - Alphabetical order
 
 ### Keyboard Shortcuts
 
@@ -132,26 +180,24 @@ Abacus stores its configuration in:
 - **macOS/Linux**: `~/.abacus/projects.json`
 - **Windows**: `%USERPROFILE%\.abacus\projects.json`
 
+### CLI Options
+
+```bash
+npm start -- [options]
+
+Options:
+  -p, --port <number>   Server port (default: 3000)
+```
+
 ### Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `3000` | Server port |
+| `PORT` | `3000` | Server port (CLI flag takes precedence) |
 
 ## Themes
 
 Abacus includes four built-in themes. Click the theme button in the header to cycle through them. Your preference is saved to localStorage.
-
-<p align="center">
-  <a href=".github/assets/light.png" target="_blank"><img src=".github/assets/light.png" alt="Light Theme" width="24%"></a>
-  <a href=".github/assets/dark.png" target="_blank"><img src=".github/assets/dark.png" alt="Dark Theme" width="24%"></a>
-  <a href=".github/assets/nord.png" target="_blank"><img src=".github/assets/nord.png" alt="Nord Theme" width="24%"></a>
-  <a href=".github/assets/warm.png" target="_blank"><img src=".github/assets/warm.png" alt="Warm Theme" width="24%"></a>
-</p>
-
-<p align="center">
-  <sub>Light &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Dark &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Nord &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Warm</sub>
-</p>
 
 | Theme | Description |
 |-------|-------------|
@@ -226,6 +272,10 @@ abacus/
 | `POST` | `/api/projects` | Add a new project |
 | `DELETE` | `/api/projects/:id` | Remove a project |
 | `GET` | `/api/projects/:id/beads` | Get beads for a project |
+| `GET` | `/api/projects/:id/beads/:beadId` | Get a single bead by ID |
+| `GET` | `/api/projects/:id/beads/:beadId/comments` | Get comments for a bead |
+| `GET` | `/api/projects/:id/beads/:beadId/dependencies` | Get dependency chain for a bead |
+| `PATCH` | `/api/projects/:id/beads/:beadId/archive` | Archive or unarchive a bead |
 | `GET` | `/api/browse?path=` | Browse filesystem directories |
 | `GET` | `/api/events` | SSE stream for real-time updates |
 
