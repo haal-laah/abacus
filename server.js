@@ -22,14 +22,14 @@ function showHelp() {
 Usage: node server.js [options]
 
 Options:
-  -p, --port <number>  Port to run the server on (default: 3000)
+  -p, --port <number>  Port to run the server on (default: 5847)
   -h, --help           Show this help message
 
 Environment:
   PORT                 Port to run the server on (overridden by CLI flag)
 
 Examples:
-  node server.js                    # Runs on port 3000
+  node server.js                    # Runs on port 5847
   node server.js --port 8080        # Runs on port 8080
   node server.js -p 4000            # Runs on port 4000
   PORT=5000 node server.js          # Runs on port 5000
@@ -113,7 +113,7 @@ function parseArgs() {
 const cliArgs = parseArgs();
 
 // Configuration (precedence: CLI > ENV > default)
-const PORT = cliArgs.port || (process.env.PORT ? validatePort(process.env.PORT) : 3000);
+const PORT = cliArgs.port || (process.env.PORT ? validatePort(process.env.PORT) : 5847);
 const CONFIG_DIR = path.join(process.env.HOME || process.env.USERPROFILE, '.abacus');
 const PROJECTS_FILE = path.join(CONFIG_DIR, 'projects.json');
 

@@ -102,7 +102,7 @@ npm start
 npm start -- --port 8080
 ```
 
-Open your browser to [http://localhost:3000](http://localhost:3000) (or your custom port)
+Open your browser to [http://localhost:5847](http://localhost:5847) (or your custom port)
 
 ## Quick Start
 
@@ -186,14 +186,14 @@ Abacus stores its configuration in:
 npm start -- [options]
 
 Options:
-  -p, --port <number>   Server port (default: 3000)
+  -p, --port <number>   Server port (default: 5847)
 ```
 
 ### Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `3000` | Server port (CLI flag takes precedence) |
+| `PORT` | `5847` | Server port (CLI flag takes precedence) |
 
 ## Themes
 
